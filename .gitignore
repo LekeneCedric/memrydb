@@ -1,0 +1,10 @@
+bin/
+memrydb
+
+*.out
+*.prof
+
+.vscode/
+.idea/
+
+.DS_Store
