@@ -42,6 +42,13 @@ func (sm *SharedMap) Set(key string, value []byte) {
 	shard.data[key] = value
 }
 
+func (sm *SharedMap) Remove(key string) {
+	shard := sm.getShard(key)
+	shard.mux.Lock()
+	defer shard.mux.Unlock()
+	delete(shard.data, key)
+}
+
 func (sm *SharedMap) getShard(key string) *Shard {
 	hashedKey := utils.Hash32(key)
 	shardIndex := int(hashedKey % uint32(len(sm.shards)))
