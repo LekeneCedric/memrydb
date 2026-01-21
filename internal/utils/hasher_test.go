@@ -6,7 +6,7 @@ const (
 	input = "user:100"
 )
 
-func TestHasher_NewHash32_IsDeterministic(t *testing.T) {
+func Test_Hasher_NewHash32_IsDeterministic(t *testing.T) {
 	input1 := input
 	input2 := input
 
