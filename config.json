@@ -1,0 +1,5 @@
+{
+  "number_of_shard": 32,
+  "max_memory_usage": 4026,
+  "max_number_of_connexion": 1024
+}

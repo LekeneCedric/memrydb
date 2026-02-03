@@ -3,17 +3,29 @@ package protocol
 import (
 	"bytes"
 	"errors"
-	"log"
 	"math"
 	"strconv"
 )
 
 type RequestType string
+type ProtocolError string
 
 const (
 	GET RequestType = "GET"
 	SET RequestType = "SET"
 	DEL RequestType = "DEL"
+)
+
+const (
+	EMPTY_REQUEST ProtocolError = "empty request"
+	INVALID_COMMAND ProtocolError = "Unhandled command"
+	KEY_SIZE_LIMIT_EXCEEDED ProtocolError = "Key size limit exceeded"
+	VALUE_SIZE_LIMIT_EXCEEDED ProtocolError = "Value size limit exceeded"
+	KEY_SIZE_NOT_A_NUMBER ProtocolError = "Key size is not a number"
+	VALUE_SIZE_NOT_A_NUMBER ProtocolError = "Value size is not a number"
+	INVALID_KEY_SIZE ProtocolError = "Key size is invalid"
+	INVALID_VALUE_SIZE ProtocolError = "Value size is invalid"
+	FAILED_TO_PARSE_REQUEST ProtocolError = "Failed to parse request"
 )
 
 type Request struct {
@@ -29,53 +41,68 @@ type decoder struct {
 func DecryptQuery(stream []byte) (*Request, error) {
 	dec := decoder{stream: stream}
 	if len(stream) == 0 {
-		return nil, errors.New("empty request")
+		return nil, errors.New(string(EMPTY_REQUEST))
 	}
-	cmd_, err := dec.extractSpaceBlock()
+	rawCmd, err := dec.extractSpaceBlock()
 	if err != nil {
 		return nil, err
 	}
-	cmd := string(cmd_)
+	cmd := string(rawCmd)
 	if !isCmdInvalid(cmd) {
-		return nil, errors.New("Invalid request")
+		return nil, errors.New(string(INVALID_COMMAND))
 	}
 	kSize, err := dec.extractSpaceBlock()
 	if err != nil {
 		return nil, err
 	}
-	if len(kSize) > math.MaxUint16 {
-		return nil, errors.New("Key size should not exceed (2 Bytes)")
-	}
 	kSizeVal, err := strconv.Atoi(string(kSize))
+	if kSizeVal > math.MaxUint16 {
+		return nil, errors.New(string(KEY_SIZE_LIMIT_EXCEEDED))
+	}
 	if err != nil {
-		log.Fatal(err)
-		return nil, errors.New("Key size is not a number")
+		return nil, errors.New(string(KEY_SIZE_NOT_A_NUMBER))
 	}
 	if cmd == string(GET) || cmd == string(DEL) {
-		key := string(dec.extractBytes(kSizeVal))
+		rawKey := dec.stream
+		if len(rawKey) != kSizeVal {
+			return nil, errors.New(string(INVALID_KEY_SIZE))
+		}
+		key := string(rawKey)
 		return &Request{
 			Method: RequestType(cmd),
 			Key:    key,
 			Value:  make([]byte, 0),
 		}, nil
 	}
+
 	vSize, err := dec.extractSpaceBlock()
 	if err != nil {
 		return nil, err
 	}
-	if len(vSize) > math.MaxUint32 {
-		return nil, errors.New("Value size should not exceed (4 Bytes)")
+	vSizeVal, err := strconv.Atoi(string(vSize))
+	if vSizeVal > math.MaxUint32 {
+		return nil, errors.New(string(VALUE_SIZE_LIMIT_EXCEEDED))
 	}
-	vSizeval, err := strconv.Atoi(string(vSize))
 	if err != nil {
-		return nil, errors.New("Value size is not a number")
+		return nil, errors.New(string(VALUE_SIZE_NOT_A_NUMBER))
 	}
 
-	key := string(dec.extractBytes(kSizeVal))
-	value := dec.extractBytes(vSizeval)
+	rawKey, err := dec.extractSpaceBlock()
+	if err != nil {
+		return nil, err
+	}
+	if len(rawKey) != kSizeVal {
+		return nil, errors.New(string(INVALID_KEY_SIZE))
+	}
+	key := string(rawKey)
+
+	value := dec.stream
+	if len(value) != vSizeVal {
+		return nil, errors.New(string(INVALID_VALUE_SIZE))
+	}
 
 	if !isCmdInvalid(cmd) {
-		return &Request{}, errors.New("Invalid command - not in (GET, SET, DEL)")
+		return &Request{}, errors.New(string(INVALID_COMMAND))
 	}
 
 	return &Request{
@@ -97,7 +124,7 @@ func isCmdInvalid(input string) bool {
 func (d *decoder) extractSpaceBlock() ([]byte, error) {
 	spaceIdx := bytes.IndexByte(d.stream, byte(' '))
 	if spaceIdx == -1 {
-		return nil, errors.New("Invalid request")
+		return nil, errors.New(string(FAILED_TO_PARSE_REQUEST))
 	}
 	cmd := make([]byte, spaceIdx)
 	copy(cmd, d.stream[:spaceIdx])

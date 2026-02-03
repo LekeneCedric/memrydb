@@ -62,8 +62,8 @@ func handleConnexion(conn net.Conn, s *Server) {
 		conn.Write([]byte("ok"))
 	case protocol.DEL:
 		s.storage.Remove(request.Key)
+		conn.Write([]byte("ok"))
 	default:
-		conn.Write([]byte("err Invalid Request Type"))
 		conn.Close()
 		return
 	}
