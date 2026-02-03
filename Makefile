@@ -9,7 +9,7 @@ benchmark:
 	go test -v -bench=. -benchmem -run=- ./...
 
 build:
-	go build -o ./bin/$(BINARY_NAME) ./cmd/server/main.go
+	go build -o ./bin/$(BINARY_NAME) main.go
 
 run: build
 	./bin/$(BINARY_NAME)

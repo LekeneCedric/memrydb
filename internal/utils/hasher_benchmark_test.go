@@ -9,7 +9,7 @@ const (
 	key = "user:100:session:active"
 )
 
-func BenchmarkCustomHash(b *testing.B) {
+func Benchmark_CustomHash(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
@@ -17,7 +17,7 @@ func BenchmarkCustomHash(b *testing.B) {
 	}
 }
 
-func BenchmarkStandardFNV(b *testing.B) {
+func Benchmark_StandardFNV(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
