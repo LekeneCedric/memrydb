@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -12,8 +13,8 @@ func Test_ReturnSetRequest(t *testing.T) {
 	key := "name"
 	value := "{\"name\":\"cedric\"}"
 
-	keySize := len(key)
-	valSize := len(value)
+	keySize := len([]byte(key))
+	valSize := len([]byte(value))
 
 	rawRequest := fmt.Sprintf("%s %d %d %s %s", command, keySize, valSize, key, value)
 	streamRawRequest := []byte(rawRequest)
@@ -32,7 +33,7 @@ func Test_ReturnGetRequest(t *testing.T) {
 	command := "GET"
 	key := "name"
 
-	keySize := len(key)
+	keySize := len([]byte(key))
 
 	rawRequest := fmt.Sprintf("%s %d %s", command, keySize, key)
 	streamRawRequest := []byte(rawRequest)
@@ -51,7 +52,7 @@ func Test_ReturnDelRequest(t *testing.T) {
 	command := "DEL"
 	key := "name"
 
-	keySize := len(key)
+	keySize := len([]byte(key))
 
 	rawRequest := fmt.Sprintf("%s %d %s", command, keySize, key)
 	streamRawRequest := []byte(rawRequest)
@@ -70,7 +71,7 @@ func Test_ReturnErrorWhenKeySizeIsIncorrect(t *testing.T) {
 	command := "GET"
 	key := "name"
 
-	keySize := len(key)
+	keySize := len([]byte(key))
 	wrongKeySize := keySize - 1
 
 	rawRequest := fmt.Sprintf("%s %d %s", command, wrongKeySize, key)
@@ -78,8 +79,8 @@ func Test_ReturnErrorWhenKeySizeIsIncorrect(t *testing.T) {
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(INVALID_KEY_SIZE) {
-		t.Fatalf("Should return an invalid key size error")
+	if !errors.Is(err, ErrInvalidKeySize) {
+		t.Fatalf("Should return an invalid key size error : %s", err.Error())
 	}
 }
 
@@ -88,8 +89,8 @@ func Test_ReturnErrorWhenValueSizeIsIncorrect(t *testing.T) {
 	key := "name"
 	value := "{\"name\":\"cedric\"}"
 
-	keySize := len(key)
-	valSize := len(value)
+	keySize := len([]byte(key))
+	valSize := len([]byte(value))
 	wrongValSize := valSize - 1
 
 	rawRequest := fmt.Sprintf("%s %d %d %s %s", command, keySize, wrongValSize, key, value)
@@ -97,8 +98,8 @@ func Test_ReturnErrorWhenValueSizeIsIncorrect(t *testing.T) {
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(INVALID_VALUE_SIZE) {
-		t.Fatalf("Should return an invalid value size error")
+	if !errors.Is(err, ErrInvalidValueSize) {
+		t.Fatalf("Should return an invalid value size error : %s", err.Error())
 	}
 }
 
@@ -106,14 +107,14 @@ func Test_ShouldReturnAnInvalidCommandError(t *testing.T) {
 	command := "UNHANDLED_COMMAND"
 	key := "name"
 
-	keySize := len(key)
+	keySize := len([]byte(key))
 
 	rawRequest := fmt.Sprintf("%s %d %s", command, keySize, key)
 	streamRawRequest := []byte(rawRequest)
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(INVALID_COMMAND) {
+	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("Should return an invalid command error")
 	}
 }
@@ -129,7 +130,7 @@ func Test_ShouldReturnAnKeySizeLimitExceedError(t *testing.T) {
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(KEY_SIZE_LIMIT_EXCEEDED) {
+	if !errors.Is(err, ErrKeySizeLimitExceeded) {
 		t.Fatalf("Should return an key size limit exceeded error : %s", err.Error())
 	}
 }
@@ -139,15 +140,15 @@ func Test_ShouldReturnAnValueSizeLimitExceedError(t *testing.T) {
 	key := "name"
 	value := "{\"name\":\"cedric\"}"
 
-	keySize := len(key)
-	wrongValSize := math.MaxUint32 + 10
+	keySize := len([]byte(key))
+	wrongValSize := math.MaxUint32 + 1
 
 	rawRequest := fmt.Sprintf("%s %d %d %s %s", command, keySize, wrongValSize, key, value)
 	streamRawRequest := []byte(rawRequest)
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(VALUE_SIZE_LIMIT_EXCEEDED) {
+	if !errors.Is(err, ErrValueSizeLimitExceeded) {
 		t.Fatalf("Should return an key size limit exceeded error : %s", err.Error())
 	}
 }
@@ -158,14 +159,14 @@ func Test_ShouldReturnAKeySizeNotANumberError(t *testing.T) {
 	value := "{\"name\":\"cedric\"}"
 
 	keySize := "z"
-	valSize := len(value)
+	valSize := len([]byte(value))
 
 	rawRequest := fmt.Sprintf("%s %s %d %s %s", command, keySize, valSize, key, value)
 	streamRawRequest := []byte(rawRequest)
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(KEY_SIZE_NOT_A_NUMBER) {
+	if !errors.Is(err, ErrKeySizeNotANumber) {
 		t.Fatalf("Should return an key size not a number error")
 	}
 }
@@ -175,7 +176,7 @@ func Test_ShouldReturnAValueSizeNotANumberError(t *testing.T) {
 	key := "name"
 	value := "{\"name\":\"cedric\"}"
 
-	keySize := len(key)
+	keySize := len([]byte(key))
 	valSize := "z"
 
 	rawRequest := fmt.Sprintf("%s %d %s %s %s", command, keySize, valSize, key, value)
@@ -183,8 +184,26 @@ func Test_ShouldReturnAValueSizeNotANumberError(t *testing.T) {
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(VALUE_SIZE_NOT_A_NUMBER) {
+	if !errors.Is(err, ErrValueSizeNotANumber) {
 		t.Fatalf("Should return an value size not a number error")
+	}
+}
+
+func Test_ShouldReturnSliceOutOfRangeError(t *testing.T) {
+	command := "SET"
+	key := "name"
+	value := "{\"name\":\"cedric\"}"
+
+	keySize := len([]byte(key))
+	valSize := len([]byte(value)) + 1
+
+	rawRequest := fmt.Sprintf("%s %d %d %s %s", command, keySize, valSize, key, value)
+	streamRawRequest := []byte(rawRequest)
+
+	_, err := DecryptQuery(streamRawRequest)
+
+	if !errors.Is(err, ErrSliceOutOrRange) {
+		t.Fatalf("Should return a Slice out of range error")
 	}
 }
 
@@ -193,15 +212,15 @@ func Test_ShouldReturnAFailedToParseRequestError(t *testing.T) {
 	key := "name"
 	value := "{\"name\":\"cedric\"}"
 
-	keySize := len(key)
-	valSize := len(value)
+	keySize := len([]byte(key))
+	valSize := len([]byte(value))
 
 	rawRequest := fmt.Sprintf("%s %d %d%s%s", command, keySize, valSize, key, value)
 	streamRawRequest := []byte(rawRequest)
 
 	_, err := DecryptQuery(streamRawRequest)
 
-	if err.Error() != string(FAILED_TO_PARSE_REQUEST) {
+	if !errors.Is(err, ErrFailedToParseRequest) {
 		t.Fatalf("Should return an failed to parse request error")
 	}
 }

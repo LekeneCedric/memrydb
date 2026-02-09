@@ -44,13 +44,11 @@ func handleConnexion(conn net.Conn, s *Server) {
 	n, err := conn.Read(buffer)
 	if err != nil {
 		conn.Write([]byte(err.Error()))
-		conn.Close()
 		return
 	}
 	request, err := protocol.DecryptQuery(buffer[:n])
 	if err != nil {
 		conn.Write([]byte(err.Error()))
-		conn.Close()
 		return
 	}
 	switch protocol.RequestType(request.Method) {
@@ -64,7 +62,6 @@ func handleConnexion(conn net.Conn, s *Server) {
 		s.storage.Remove(request.Key)
 		conn.Write([]byte("ok"))
 	default:
-		conn.Close()
 		return
 	}
 }

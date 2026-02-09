@@ -26,7 +26,19 @@ const (
 	INVALID_KEY_SIZE ProtocolError = "Key size is invalid"
 	INVALID_VALUE_SIZE ProtocolError = "Value size is invalid"
 	FAILED_TO_PARSE_REQUEST ProtocolError = "Failed to parse request"
+	SLICE_OUT_OF_RANGE ProtocolError = "Slice out of range"
 )
+
+var ErrEmptyRequest = errors.New(string(EMPTY_REQUEST))
+var ErrInvalidCommand = errors.New(string(INVALID_COMMAND))
+var ErrKeySizeLimitExceeded = errors.New(string(KEY_SIZE_LIMIT_EXCEEDED))
+var ErrValueSizeLimitExceeded = errors.New(string(VALUE_SIZE_LIMIT_EXCEEDED))
+var ErrKeySizeNotANumber = errors.New(string(KEY_SIZE_NOT_A_NUMBER))
+var ErrValueSizeNotANumber = errors.New(string(VALUE_SIZE_NOT_A_NUMBER))
+var ErrInvalidKeySize = errors.New(string(INVALID_KEY_SIZE))
+var ErrInvalidValueSize = errors.New(string(INVALID_VALUE_SIZE))
+var ErrFailedToParseRequest = errors.New(string(FAILED_TO_PARSE_REQUEST))
+var ErrSliceOutOrRange = errors.New(string(SLICE_OUT_OF_RANGE))
 
 type Request struct {
 	Method RequestType
@@ -41,7 +53,7 @@ type decoder struct {
 func DecryptQuery(stream []byte) (*Request, error) {
 	dec := decoder{stream: stream}
 	if len(stream) == 0 {
-		return nil, errors.New(string(EMPTY_REQUEST))
+		return nil, ErrEmptyRequest
 	}
 	rawCmd, err := dec.extractSpaceBlock()
 	if err != nil {
@@ -49,7 +61,7 @@ func DecryptQuery(stream []byte) (*Request, error) {
 	}
 	cmd := string(rawCmd)
 	if !isCmdInvalid(cmd) {
-		return nil, errors.New(string(INVALID_COMMAND))
+		return nil, ErrInvalidCommand
 	}
 	kSize, err := dec.extractSpaceBlock()
 	if err != nil {
@@ -57,15 +69,18 @@ func DecryptQuery(stream []byte) (*Request, error) {
 	}
 	kSizeVal, err := strconv.Atoi(string(kSize))
 	if kSizeVal > math.MaxUint16 {
-		return nil, errors.New(string(KEY_SIZE_LIMIT_EXCEEDED))
+		return nil, ErrKeySizeLimitExceeded
 	}
 	if err != nil {
-		return nil, errors.New(string(KEY_SIZE_NOT_A_NUMBER))
+		return nil, ErrKeySizeNotANumber
 	}
 	if cmd == string(GET) || cmd == string(DEL) {
-		rawKey := dec.stream
+		rawKey, err := dec.extractBytes(kSizeVal)
+		if err != nil {
+			return nil, err
+		}
 		if len(rawKey) != kSizeVal {
-			return nil, errors.New(string(INVALID_KEY_SIZE))
+			return nil, ErrInvalidKeySize
 		}
 		key := string(rawKey)
 		return &Request{
@@ -81,10 +96,10 @@ func DecryptQuery(stream []byte) (*Request, error) {
 	}
 	vSizeVal, err := strconv.Atoi(string(vSize))
 	if vSizeVal > math.MaxUint32 {
-		return nil, errors.New(string(VALUE_SIZE_LIMIT_EXCEEDED))
+		return nil, ErrValueSizeLimitExceeded
 	}
 	if err != nil {
-		return nil, errors.New(string(VALUE_SIZE_NOT_A_NUMBER))
+		return nil, ErrValueSizeNotANumber
 	}
 
 	rawKey, err := dec.extractSpaceBlock()
@@ -92,17 +107,20 @@ func DecryptQuery(stream []byte) (*Request, error) {
 		return nil, err
 	}
 	if len(rawKey) != kSizeVal {
-		return nil, errors.New(string(INVALID_KEY_SIZE))
+		return nil, ErrInvalidKeySize
 	}
 	key := string(rawKey)
 
-	value := dec.stream
+	value, err := dec.extractBytes(vSizeVal)
+	if err != nil {
+		return nil, err
+	}
 	if len(value) != vSizeVal {
-		return nil, errors.New(string(INVALID_VALUE_SIZE))
+		return nil, ErrInvalidValueSize
 	}
 
 	if !isCmdInvalid(cmd) {
-		return &Request{}, errors.New(string(INVALID_COMMAND))
+		return &Request{}, ErrInvalidCommand
 	}
 
 	return &Request{
@@ -124,21 +142,21 @@ func isCmdInvalid(input string) bool {
 func (d *decoder) extractSpaceBlock() ([]byte, error) {
 	spaceIdx := bytes.IndexByte(d.stream, byte(' '))
 	if spaceIdx == -1 {
-		return nil, errors.New(string(FAILED_TO_PARSE_REQUEST))
+		return nil, ErrFailedToParseRequest
 	}
-	cmd := make([]byte, spaceIdx)
-	copy(cmd, d.stream[:spaceIdx])
+	res := d.stream[:spaceIdx]
 	d.stream = d.stream[spaceIdx+1:]
-	return cmd, nil
+	return res, nil
 }
 
-func (d *decoder) extractBytes(size int) []byte {
-	part := make([]byte, size)
-	copy(part, d.stream[:size])
-	d.stream = d.stream[size:]
-	spaceIdx := bytes.IndexByte(d.stream, byte(' '))
-	if spaceIdx == 0 {
-		d.stream = d.stream[1:]
+func (d *decoder) extractBytes(size int) ([]byte, error) {
+	if len(d.stream) < size {
+		return nil, ErrSliceOutOrRange
 	}
-	return part
+	if len(d.stream) == size {
+		return d.stream[0:], nil
+	}
+	res := d.stream[:size+1]
+	d.stream = d.stream[size+1:]
+	return res, nil
 }

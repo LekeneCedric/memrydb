@@ -1,6 +1,6 @@
 package main
 
-import "github.com/LekeneCedric/memrydb/cmd/server"
+import "github.com/LekeneCedric/memrydb/internal/server"
 
 func main() {
 	s := &server.Server{}
